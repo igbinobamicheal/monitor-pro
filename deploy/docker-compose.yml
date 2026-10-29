@@ -14,6 +14,24 @@ services:
     depends_on:
       - api-1
       - api-2
+      - web
+
+  # Next.js 15+ Frontend Dashboard
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    container_name: monitopro_web
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - NEXT_PUBLIC_API_URL=http://localhost/api
+      - API_URL=http://api-1:8080/api
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-1
+      - api-2
 
   # Go Control Plane Replica 1
   api-1:
@@ -75,7 +93,7 @@ services:
       - POSTGRES_PASSWORD=dev_secret_password
       - POSTGRES_DB=monitopro_db
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-25432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ../shared/migrations/00001_initial_schema.sql:/docker-entrypoint-initdb.d/1-schema.sql:ro
