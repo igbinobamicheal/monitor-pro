@@ -1,128 +1,179 @@
-# Proactive IT Support Dashboard
+# Monitor Pro
 
-A high-performance system monitoring solution with a C++20 Crow-based web server, PostgreSQL 15+ storage (fully compatible with Supabase), a C++ monitoring agent, and a modern glassmorphic web UI frontend.
+> **Zero-Trust Windows Endpoint Observability, Deterministic AI Diagnostics & Policy-Governed Remediation**
 
-## Project Structure
-- `/backend`: The REST web server compiled with C++20, utilizing Crow, JWT authentication, and PostgreSQL (libpqxx).
-- `/agent`: C++ metric collection agent that posts local host metrics (CPU, RAM, Disk, Uptime) to the backend.
-- `/database`: Schema initialization and seed scripts for PostgreSQL.
-- `/frontend`: Modern glassmorphic web interface showing real-time agent statuses and ingested metrics.
-- `/docs`: Architecture, API specifications, and deployment documentation.
-- `/scripts`: Automation batch scripts for building and launching components.
+Monitor Pro is an enterprise-grade, multi-tenant endpoint management platform engineered for proactive IT operations. It unifies low-overhead native Windows telemetry, deterministic AI root-cause hypothesis ranking with PII redaction, allowlisted one-click remediation, and unattended WebRTC remote support.
 
-## Prerequisites
-1. **C++20 Compiler** (MSVC 2022+ / GCC 11+)
-2. **CMake 3.15+**
-3. **vcpkg** package manager (integrated automatically via `vcpkg.json` manifest files)
-4. **PostgreSQL 15+ Server** (local database or hosted on Supabase, listening on port 5432)
+---
 
-## Quick Start
+## Architecture Overview
 
-### 1. Database Setup
-Execute `database/schema.sql` and `database/seed.sql` on your PostgreSQL server to set up the database schemas and seed a default admin account.
+```
+                                      ┌─────────────────────────────────────────┐
+                                      │             Edge Gateway                │
+                                      │         Caddy Reverse Proxy             │
+                                      │         (:80 / :443 TLS Term)           │
+                                      └────────────────────┬────────────────────┘
+                                                           │
+                                   ┌───────────────────────┴───────────────────────┐
+                                   ▼                                               ▼
+                     ┌───────────────────────────┐                   ┌───────────────────────────┐
+                     │     Next.js 15+ Web       │                   │    Go API Control Plane   │
+                     │  Warm Canvas / Obsidian   │◄─────────────────►│   Multi-Replica (Chi)     │
+                     │    Port :3000 (React)     │                   │   Ed25519 & JWT Auth      │
+                     └───────────────────────────┘                   └─────────────┬─────────────┘
+                                                                                   │
+                                           ┌───────────────────────────────────────┴──────────────────┐
+                                           ▼                                                          ▼
+                             ┌───────────────────────────┐                              ┌───────────────────────────┐
+                             │    PostgreSQL 15+ RLS     │                              │       NATS JetStream      │
+                             │  Authoritative Storage    │                              │     Durable Telemetry     │
+                             │  Row-Level Tenant Guard   │                              │     Port :4222 / :8222    │
+                             └───────────────────────────┘                              └───────────────────────────┘
+                                           ▲
+                                           │ Signed Hardware Telemetry & Heartbeat
+                                           │ (30-second cycles, Ed25519 Mutual Auth)
+                                           │
+                             ┌───────────────────────────┐
+                             │  Native Rust Agent Daemon │
+                             │  proactive-it-agent.exe   │
+                             │  Win32 Hardware Sensor    │
+                             └───────────────────────────┘
+```
 
-### 2. Configure Backend
-Copy `backend/config/config.json.template` to `backend/config/config.json` and configure your database credentials.
+---
 
-### 3. Build & Run Backend
-Dependencies are automatically installed via **vcpkg manifest mode** (using `backend/vcpkg.json`) during the CMake configuration step. We define build options using CMake presets:
+## Key Features
+
+1. **Native Rust Endpoint Agent (`services/agent`)**
+   - Standalone Windows binary (under 4 MB footprint, zero runtime dependencies).
+   - High-performance Win32 hardware sensor (CPU, memory paging, drive volumes, network interfaces).
+   - Ed25519 cryptographic identity provisioning and telemetry packet signing.
+   - Built-in CLI flags: `--register <URL> <TOKEN>`, `--install`, `--uninstall`, `--run`.
+
+2. **Go Control Plane API (`services/api`)**
+   - Lightweight, concurrent Chi HTTP router with sub-millisecond route dispatch.
+   - Multi-tenant architecture with mandatory Row-Level Security (RLS) enforcement.
+   - RFC 6238 TOTP Multi-Factor Authentication (MFA) and tenant subdomain resolver.
+   - Automated PII scrubbing regex pipeline safeguarding telemetry before AI inference.
+   - Allowlisted remediation catalogue preventing arbitrary shell code execution.
+
+3. **Next.js 15+ Operations Dashboard (`apps/web`)**
+   - Tailored aesthetic with Warm Canvas (`#ECEAE5`), Obsidian Sidebar (`#151310`), and Rich Amber accents (`#B87C3B`).
+   - 17 fully integrated routes:
+     - Minimalist Marketing Landing Page with ambient lighting canvas.
+     - Multi-step Organization Onboarding & TOTP MFA Setup.
+     - Fleet Infrastructure Management & Deep Diagnostics Inspection.
+     - 3-Step Guided Windows Agent Deployment Wizard.
+     - Active Alerts Center & Dynamic Rule Policy Manager.
+     - AI-Assisted Root Cause Incident Investigation.
+     - Low-Latency Remote Support with User Consent Enforcement.
+     - Policy-Governed Remediation Dispatch & Execution History.
+     - Team RBAC & Role Management.
+     - Workspace Settings & Zstandard Data Retention Controls.
+
+4. **Inno Setup Windows Packaging (`installer/windows`)**
+   - Single-file installer (`MonitorPro-Setup.exe`) bundling the native Rust agent.
+   - Headless deployment support via `/VERYSILENT /SERVERURL=... /REGTOKEN=...` for Active Directory GPO, Intune, and Datto RMM mass rollouts.
+
+---
+
+## Directory Structure
+
+```text
+├── apps/
+│   └── web/                   # Next.js 15+ App Router Frontend
+│       ├── app/               # 17 Pages & Route Groups (auth, dashboard, marketing)
+│       ├── components/        # Obsidian Sidebar, Ambient Background, Navbar
+│       ├── lib/               # Typed API Client & Contract Interfaces
+│       └── tailwind.config.ts # Precision V1 Color Palette & Tokens
+├── services/
+│   ├── agent/                 # Native Rust Windows Endpoint Agent
+│   │   └── src/               # Telemetry Collector, Ed25519 Enrollment, Remote Protocol
+│   ├── api/                   # Go 1.24+ Control Plane API
+│   │   ├── cmd/server/        # Entrypoint & Signal Handlers
+│   │   └── internal/          # Chi Handlers, Storage Adapters, AI Redactor, TOTP
+│   └── workers/               # Go Background Event Processing & Archival
+├── shared/
+│   ├── contracts/             # OpenAPI 3.1, NATS Events, Remediation Catalogue
+│   └── migrations/            # PostgreSQL Schema & Row-Level Security (RLS)
+├── installer/
+│   └── windows/               # Inno Setup Script (GUI & Silent CLI Deployment)
+└── deploy/
+    ├── docker-compose.yml     # Complete Multi-Container Stack (Caddy, 2x API, Postgres, NATS)
+    └── caddy/Caddyfile        # Edge Reverse Proxy Configuration
+```
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- **Go:** 1.22+
+- **Node.js:** 18+ (Node 20+ recommended)
+- **Rust:** 1.80+ (MSVC toolchain for Windows agent)
+- **PostgreSQL:** 15+
+- **Inno Setup:** 6.x (for building `.exe` installer)
+
+---
+
+### Running Locally
+
+#### 1. Go Control Plane API
+
 ```bash
-cd backend
-cmake --preset default
-cmake --build --preset default
-./build/Release/proactive_it_dashboard
+cd services/api
+cp .env.example .env
+go run ./cmd/server
+# Listening on http://localhost:8080
 ```
 
-### 4. Build & Run Agent
-The agent's dependencies (`nlohmann-json` and `cpr`) are automatically resolved via `agent/vcpkg.json`. Build using CMake presets:
-```bash
-cd agent
-cmake --preset default
-cmake --build --preset default
-./build/Release/proactive_it_agent
-```
-On first start, provide the administrator JWT token (obtained via POST `/api/login` using username `admin` and password `admin123`) to register the agent device.
-
-## Cloud Backend Environment Variables
-
-When deploying the backend on cloud hosting (Render, Railway, etc.), add these in your **Environment Variables**:
-
-| Key | Value |
-|-----|-------|
-| `DB_HOST` | Your PostgreSQL host (e.g. `db.supabase.co` for Supabase) |
-| `DB_PORT` | `5432` (or the appropriate connection port) |
-| `DB_USER` | Your PostgreSQL username (e.g. `postgres`) |
-| `DB_PASSWORD` | Your PostgreSQL password |
-| `DB_NAME` | Your database name (e.g. `postgres` or `it_monitoring`) |
-| `JWT_SECRET` | A long random secret string |
-| `REGISTRATION_KEY` | A long random key shared with agents |
-| `SERVER_HOST` | `0.0.0.0` |
-
-Render automatically provides `PORT`, and the backend will use it if present. For local runs, the backend still supports `config.json`; environment variables override `config.json` when both are present.
-
-## Deploying the Frontend to Vercel (from GitHub)
-
-The `frontend/` directory is a static HTML/CSS/JS site — no build step required. Vercel serves it directly.
-
-### Step 1: Push Your Code to GitHub
-
-Make sure all your latest changes are committed and pushed:
+#### 2. Next.js Web Dashboard
 
 ```bash
-git add -A
-git commit -m "prepare for Vercel deployment"
-git push origin main
+cd apps/web
+npm install
+cp .env.example .env.local
+npm run dev
+# Live at http://localhost:3000
 ```
 
-### Step 2: Import the Project on Vercel
+#### 3. Native Rust Agent
 
-1. Go to [vercel.com](https://vercel.com) and sign in with your GitHub account.
-2. Click **"Add New…"** → **"Project"**.
-3. Find and select the **PROACTIVE-IT-SUPPORT-DASHBOARD** repository from the list.
-4. Click **"Import"**.
+```bash
+cd services/agent
+cargo build --release
 
-### Step 3: Configure the Project Settings
-
-On the configuration screen before deploying, set the following:
-
-| Setting              | Value        |
-|----------------------|--------------|
-| **Framework Preset** | `Other`      |
-| **Root Directory**   | `frontend`   |
-| **Build Command**    | *(leave empty — no build step)* |
-| **Output Directory** | `.`          |
-
-> **Important:** Click **"Edit"** next to Root Directory and type `frontend`. This tells Vercel to serve only the frontend folder, not the entire repo.
-
-### Step 4: Set the Backend API URL (Environment Variable)
-
-If your C++ backend is running on a public server, you need to tell the frontend where to find it:
-
-1. Expand the **"Environment Variables"** section on the same page.
-2. This project reads the API URL from a script tag. To configure it for production, add a `<script>` before `api.js` in each HTML file:
-
-```html
-<script>window.API_BASE_URL = 'https://your-backend-server.com/api';</script>
+# Register against local or remote control plane
+.\target\release\proactive-it-agent.exe --register "http://localhost:8080" "<ENROLLMENT_TOKEN>"
 ```
 
-Alternatively, for local development and demo purposes, the frontend defaults to `http://localhost:8080/api`.
+---
 
-### Step 5: Deploy
+### Running via Docker Compose
 
-1. Click **"Deploy"**.
-2. Vercel will deploy your static files in ~10 seconds.
-3. You'll receive a live URL like `https://proactive-it-support-dashboard.vercel.app`.
+```bash
+cd deploy
+docker compose up -d --build
+```
 
-### Step 6: Automatic Deployments
+Services started:
+- **Caddy Edge Proxy:** `http://localhost:80`
+- **Go API Replicas:** `api-1` and `api-2`
+- **PostgreSQL 15:** Port 5432 with auto-applied migrations
+- **NATS JetStream:** Port 4222 (Client) & Port 8222 (HTTP Dashboard)
 
-After the initial setup, every `git push` to `main` will automatically trigger a new deployment on Vercel. No manual steps needed.
+---
 
-### Clean URLs
+## Security & Zero-Trust Architecture
 
-The included `vercel.json` configures clean URL rewrites, so these all work:
+- **No Plaintext Agent Secrets:** Nodes authenticate exclusively via Ed25519 asymmetric signatures.
+- **Strict Remediation Allowlist:** Only pre-audited diagnostic actions defined in `shared/contracts/remediation_catalogue.json` can be executed. Arbitrary shell execution is rejected by the agent parser.
+- **Auditable Air-Gapped Consent:** Remote screen sessions cannot start without explicit user acceptance on the physical Windows desktop.
 
-- `yourdomain.vercel.app/dashboard` → `dashboard.html`
-- `yourdomain.vercel.app/login` → `login.html`
-- `yourdomain.vercel.app/devices` → `devices.html`
-- `yourdomain.vercel.app/alerts` → `alerts.html`
-- `yourdomain.vercel.app/device-details` → `device-details.html`
+---
+
+## License
+
+Proprietary — All rights reserved.

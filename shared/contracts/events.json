@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NATS JetStream Event Schemas",
+  "version": "2.0.0",
+  "streams": [
+    {
+      "name": "MONITOR_TELEMETRY",
+      "subjects": ["telemetry.raw.>"],
+      "retention": "limits",
+      "max_age": "86400s",
+      "description": "Transient high-throughput telemetry stream consumed in batches by telemetry workers"
+    },
+    {
+      "name": "MONITOR_EVENTS",
+      "subjects": ["events.>"],
+      "retention": "interest",
+      "description": "Alert triggers, incident state changes, device connectivity transitions"
+    },
+    {
+      "name": "MONITOR_JOBS",
+      "subjects": ["jobs.>"],
+      "retention": "workqueue",
+      "description": "Policy-approved remediation tasks dispatched to specific endpoint agents"
+    },
+    {
+      "name": "MONITOR_AUDIT",
+      "subjects": ["audit.>"],
+      "retention": "limits",
+      "max_age": "2592000s",
+      "description": "Immutable security and consent audit trail"
+    }
+  ],
+  "event_types": {
+    "TelemetryIngested": {
+      "subject": "telemetry.raw.{org_id}.{device_id}",
+      "properties": {
+        "idempotency_key": { "type": "string" },
+        "organization_id": { "type": "string", "format": "uuid" },
+        "device_id": { "type": "string", "format": "uuid" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "cpu_usage": { "type": "number" },
+        "ram_usage": { "type": "number" },
+        "disk_usage": { "type": "number" },
+        "network_in": { "type": "number" },
+        "network_out": { "type": "number" },
+        "uptime": { "type": "integer" }
+      }
+    },
+    "AlertTriggered": {
+      "subject": "events.{org_id}.alert_triggered",
+      "properties": {
+        "alert_id": { "type": "string", "format": "uuid" },
+        "organization_id": { "type": "string", "format": "uuid" },
+        "device_id": { "type": "string", "format": "uuid" },
+        "rule_id": { "type": "string" },
+        "severity": { "type": "string", "enum": ["warning", "critical"] },
+        "metric_value": { "type": "number" },
+        "threshold": { "type": "number" }
+      }
+    },
+    "RemediationDispatched": {
+      "subject": "jobs.{org_id}.{device_id}.execute",
+      "properties": {
+        "job_id": { "type": "string", "format": "uuid" },
+        "organization_id": { "type": "string", "format": "uuid" },
+        "device_id": { "type": "string", "format": "uuid" },
+        "action_id": { "type": "string" },
+        "parameters": { "type": "object" },
+        "signature": { "type": "string" },
+        "expires_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "RemoteSupportConsentChanged": {
+      "subject": "audit.{org_id}.remote_consent",
+      "properties": {
+        "session_id": { "type": "string", "format": "uuid" },
+        "device_id": { "type": "string", "format": "uuid" },
+        "operator_id": { "type": "string", "format": "uuid" },
+        "consent_decision": { "type": "string", "enum": ["approved", "rejected", "revoked", "timed_out"] },
+        "granted_permissions": { "type": "array", "items": { "type": "string" } },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

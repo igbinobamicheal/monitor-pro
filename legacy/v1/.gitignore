@@ -1,0 +1,39 @@
+# Build directories
+build/
+bin/
+obj/
+out/
+backend/build/
+agent/build/
+
+# IDE files
+.vs/
+.vscode/
+*.user
+*.suo
+*.db
+*.opendb
+
+
+
+# Vercel
+.vercel/
+node_modules/
+
+# Logs & temp files
+*.log
+*.tmp
+
+# vcpkg manifest installation folders
+vcpkg_installed/
+vcpkg-installed/
+
+# Secret configuration files (contain credentials, JWT secrets, etc.)
+backend/config/config.json
+agent/config/config.json
+
+# Local configurations & installers
+/config.json
+/installer/windows/
+
+installer/

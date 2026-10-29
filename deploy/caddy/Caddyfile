@@ -1,0 +1,47 @@
+{
+    admin off
+    auto_https off
+}
+
+# 1. Marketing root domain (localhost / monitopro.localhost)
+http://localhost, http://monitopro.localhost {
+    # API endpoints load balanced across Go replicas
+    handle /api/* {
+        reverse_proxy api-1:8080 api-2:8080 {
+            lb_policy round_robin
+            health_uri /api/health
+            health_interval 5s
+            health_timeout 2s
+        }
+    }
+
+    # Public web pages routed to Next.js
+    handle {
+        reverse_proxy web:3000
+    }
+}
+
+# 2. Company tenant subdomains (*.localhost / *.monitopro.localhost)
+http://*.localhost, http://*.monitopro.localhost {
+    # API endpoints load balanced across Go replicas with tenant header preservation
+    handle /api/* {
+        reverse_proxy api-1:8080 api-2:8080 {
+            lb_policy round_robin
+            health_uri /api/health
+            health_interval 5s
+            health_timeout 2s
+        }
+    }
+
+    # WebSockets / WebRTC signaling endpoint for remote support
+    handle /ws/* {
+        reverse_proxy api-1:8080 api-2:8080 {
+            lb_policy round_robin
+        }
+    }
+
+    # Authenticated Next.js tenant dashboards
+    handle {
+        reverse_proxy web:3000
+    }
+}

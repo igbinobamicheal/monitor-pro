@@ -1,6 +1,0 @@
-{
-  "server": "proactive-it-support-dashboard-production.up.railway.app/api",
-  "device_name": "Main_Agent_Host",
-  "device_token": "",
-  "interval_seconds": 10
-}

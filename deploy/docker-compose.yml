@@ -1,0 +1,133 @@
+version: '3.8'
+
+services:
+  # Edge Load Balancer (Mandatory Day-1 requirement)
+  caddy:
+    image: caddy:2-alpine
+    container_name: monitopro_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - api-1
+      - api-2
+
+  # Go Control Plane Replica 1
+  api-1:
+    build:
+      context: ..
+      dockerfile: services/api/Dockerfile
+    container_name: monitopro_api_1
+    restart: unless-stopped
+    environment:
+      - PORT=8080
+      - REPLICA_ID=api-1
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=monitopro
+      - DB_PASSWORD=dev_secret_password
+      - DB_NAME=monitopro_db
+      - NATS_URL=nats://nats:4222
+      - JWT_SECRET=dev_jwt_secret_key_minimum_32_characters_long
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  # Go Control Plane Replica 2
+  api-2:
+    build:
+      context: ..
+      dockerfile: services/api/Dockerfile
+    container_name: monitopro_api_2
+    restart: unless-stopped
+    environment:
+      - PORT=8080
+      - REPLICA_ID=api-2
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=monitopro
+      - DB_PASSWORD=dev_secret_password
+      - DB_NAME=monitopro_db
+      - NATS_URL=nats://nats:4222
+      - JWT_SECRET=dev_jwt_secret_key_minimum_32_characters_long
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  # Authoritative Persistent Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: monitopro_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=monitopro
+      - POSTGRES_PASSWORD=dev_secret_password
+      - POSTGRES_DB=monitopro_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ../shared/migrations/00001_initial_schema.sql:/docker-entrypoint-initdb.d/1-schema.sql:ro
+      - ../shared/migrations/00002_row_level_security.sql:/docker-entrypoint-initdb.d/2-rls.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U monitopro -d monitopro_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Durable Asynchronous Messaging & Event Stream
+  nats:
+    image: nats:2.10-alpine
+    container_name: monitopro_nats
+    restart: unless-stopped
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222" # Client port
+      - "8222:8222" # HTTP Management
+    volumes:
+      - nats_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/varz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Local Email Catcher for Invitations & MFA
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: monitopro_mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025" # Web UI
+      - "1025:1025" # SMTP Port
+
+  # Durable Background Event Processor & Archiver
+  workers:
+    build:
+      context: ..
+      dockerfile: services/workers/Dockerfile
+    container_name: monitopro_workers
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgres://monitopro:dev_secret_password@postgres:5432/monitopro_db?sslmode=disable
+      - NATS_URL=nats://nats:4222
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
+volumes:
+  pg_data:
+  nats_data:

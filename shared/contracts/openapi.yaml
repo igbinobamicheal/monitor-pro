@@ -1,0 +1,575 @@
+openapi: 3.1.0
+info:
+  title: Proactive IT Support Dashboard V2 API
+  version: 2.0.0
+  description: Enterprise multi-tenant API for endpoint monitoring, incident management, advisory AI, policy-controlled remediation, and native remote support.
+servers:
+  - url: https://{tenant}.monitopro.com/api/v1
+    description: Tenant workspace API
+    variables:
+      tenant:
+        default: demo
+        description: Organization subdomain identifier
+  - url: http://localhost:8080/api/v1
+    description: Local development API (direct)
+  - url: http://localhost:80/api/v1
+    description: Local load balancer endpoint (Caddy)
+
+security:
+  - BearerAuth: []
+  - TenantHeader: []
+
+paths:
+  /auth/login:
+    post:
+      summary: Authenticate user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+                mfa_code: { type: string, description: "6-digit TOTP if MFA enabled" }
+      responses:
+        '200':
+          description: Successfully authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  expires_at: { type: string, format: date-time }
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      summary: Revoke session
+      responses:
+        '204':
+          description: Session terminated
+
+  /auth/mfa/setup:
+    post:
+      summary: Initiate TOTP MFA configuration
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  secret: { type: string }
+                  qr_code_url: { type: string }
+
+  /auth/mfa/verify:
+    post:
+      summary: Finalize and enable TOTP MFA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        '200':
+          description: MFA activated
+
+  /orgs/current:
+    get:
+      summary: Get active organization details
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+
+  /orgs/{org_id}/settings/ai:
+    get:
+      summary: Get tenant AI settings
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AISettings'
+    put:
+      summary: Update tenant AI settings (toggle AI advisory)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AISettings'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AISettings'
+
+  /devices:
+    get:
+      summary: List managed fleet devices with filtering and pagination
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [online, degraded, offline] }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Device'
+                  total: { type: integer }
+                  page: { type: integer }
+
+  /devices/{id}:
+    get:
+      summary: Retrieve single device profile and latest snapshot
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceDetails'
+
+  /devices/{id}/diagnostics:
+    get:
+      summary: Retrieve deep diagnostic data (hardware, software, event logs)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceDiagnostics'
+
+  /devices/enrollment-tokens:
+    post:
+      summary: Generate a scoped enrollment token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expires_in_hours: { type: integer, default: 24 }
+                max_uses: { type: integer, default: 1 }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  expires_at: { type: string, format: date-time }
+                  installer_command: { type: string }
+
+  /agent/enroll:
+    post:
+      summary: Endpoint agent cryptographic enrollment
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enrollment_token, machine_guid, hostname, public_key]
+              properties:
+                enrollment_token: { type: string }
+                machine_guid: { type: string }
+                hostname: { type: string }
+                os_version: { type: string }
+                public_key: { type: string, description: "Base64 Ed25519 public key" }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  device_id: { type: string, format: uuid }
+                  organization_id: { type: string, format: uuid }
+                  signed_certificate: { type: string }
+                  telemetry_interval_sec: { type: integer, default: 30 }
+
+  /agent/telemetry:
+    post:
+      summary: Ingest signed agent telemetry report
+      security:
+        - DeviceSignatureAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelemetryReport'
+      responses:
+        '202':
+          description: Telemetry accepted for processing
+
+  /alerts:
+    get:
+      summary: List alerts
+      parameters:
+        - name: active
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Alert'
+
+  /incidents:
+    get:
+      summary: List correlated incidents
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, investigating, resolved, closed] }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Incident'
+
+  /incidents/{id}:
+    get:
+      summary: Get incident details with timeline and alert grouping
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+
+  /incidents/{id}/ai-analysis:
+    post:
+      summary: Request on-demand AI diagnostic advisory analysis
+      description: Generates advisory hypotheses, supporting evidence, and verification steps. Never executes actions.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIAdvisoryResponse'
+
+  /remediation/actions:
+    get:
+      summary: Retrieve allowlisted remediation catalogue
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RemediationAction'
+
+  /remediation/jobs:
+    post:
+      summary: Propose remediation job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [device_id, action_id, parameters, justification]
+              properties:
+                device_id: { type: string, format: uuid }
+                action_id: { type: string }
+                parameters: { type: object }
+                justification: { type: string }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemediationJob'
+
+  /remediation/jobs/{id}/approve:
+    post:
+      summary: Approve pending remediation job
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemediationJob'
+
+  /remote-support/sessions:
+    post:
+      summary: Request remote screen sharing / control session
+      description: Dispatches explicit consent request to target Windows endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [device_id, permissions_requested, reason]
+              properties:
+                device_id: { type: string, format: uuid }
+                permissions_requested:
+                  type: array
+                  items:
+                    type: string
+                    enum: [screen_view, remote_control]
+                reason: { type: string }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemoteSession'
+
+  /remote-support/sessions/{id}/terminate:
+    post:
+      summary: Terminate active remote support session immediately
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Session revoked
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    TenantHeader:
+      type: apiKey
+      in: header
+      name: X-Tenant-ID
+    DeviceSignatureAuth:
+      type: apiKey
+      in: header
+      name: X-Agent-Signature
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        full_name: { type: string }
+        role: { type: string, enum: [owner_admin, it_admin, it_operator, readonly_viewer] }
+        mfa_enabled: { type: boolean }
+
+    Organization:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        subdomain: { type: string }
+        created_at: { type: string, format: date-time }
+
+    AISettings:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        redact_pii: { type: boolean }
+        provider: { type: string, enum: [mock_advisory, anthropic, openai, local_ollama] }
+
+    Device:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        hostname: { type: string }
+        ip_address: { type: string }
+        status: { type: string, enum: [online, degraded, offline] }
+        last_seen: { type: string, format: date-time }
+        assigned_user: { type: string }
+
+    DeviceDetails:
+      allOf:
+        - $ref: '#/components/schemas/Device'
+        - type: object
+          properties:
+            os_version: { type: string }
+            uptime_seconds: { type: integer }
+            latest_metrics:
+              $ref: '#/components/schemas/TelemetryMetrics'
+
+    TelemetryMetrics:
+      type: object
+      properties:
+        cpu_usage: { type: number }
+        ram_usage: { type: number }
+        disk_usage: { type: number }
+        network_in_kb: { type: number }
+        network_out_kb: { type: number }
+
+    TelemetryReport:
+      type: object
+      required: [device_id, timestamp, metrics]
+      properties:
+        device_id: { type: string, format: uuid }
+        timestamp: { type: string, format: date-time }
+        metrics:
+          $ref: '#/components/schemas/TelemetryMetrics'
+        diagnostics_delta: { type: object }
+
+    DeviceDiagnostics:
+      type: object
+      properties:
+        system: { type: object }
+        cpu_cores: { type: array, items: { type: number } }
+        processes: { type: array, items: { type: object } }
+        services: { type: array, items: { type: object } }
+        event_logs: { type: array, items: { type: object } }
+        software: { type: array, items: { type: object } }
+
+    Alert:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        device_id: { type: string, format: uuid }
+        rule_name: { type: string }
+        severity: { type: string, enum: [info, warning, critical] }
+        message: { type: string }
+        created_at: { type: string, format: date-time }
+        resolved: { type: boolean }
+
+    Incident:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        severity: { type: string, enum: [low, medium, high, critical] }
+        status: { type: string, enum: [open, investigating, resolved, closed] }
+        assigned_to: { type: string }
+        created_at: { type: string, format: date-time }
+        alerts_count: { type: integer }
+
+    AIAdvisoryResponse:
+      type: object
+      properties:
+        incident_id: { type: string, format: uuid }
+        summary: { type: string }
+        hypotheses:
+          type: array
+          items:
+            type: object
+            properties:
+              rank: { type: integer }
+              cause: { type: string }
+              confidence: { type: number }
+              supporting_evidence: { type: array, items: { type: string } }
+              contradicting_evidence: { type: array, items: { type: string } }
+        recommended_verification_steps:
+          type: array
+          items: { type: string }
+        suggested_remediations:
+          type: array
+          items:
+            type: object
+            properties:
+              action_id: { type: string }
+              risk_level: { type: string }
+              expected_outcome: { type: string }
+
+    RemediationAction:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        risk_level: { type: string, enum: [read_only, low_risk, destructive] }
+        requires_approval: { type: boolean }
+        parameter_schema: { type: object }
+
+    RemediationJob:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        device_id: { type: string, format: uuid }
+        action_id: { type: string }
+        status: { type: string, enum: [pending_approval, approved, queued, executing, succeeded, failed, rejected] }
+        requester: { type: string }
+        approver: { type: string }
+        execution_output: { type: string }
+        verification_passed: { type: boolean }
+
+    RemoteSession:
+      type: object
+      properties:
+        session_id: { type: string, format: uuid }
+        device_id: { type: string, format: uuid }
+        operator_id: { type: string, format: uuid }
+        status: { type: string, enum: [awaiting_consent, active, rejected, terminated, expired] }
+        permissions: { type: array, items: { type: string } }
+        signaling_url: { type: string }
+        session_token: { type: string }
+        expires_at: { type: string, format: date-time }
+
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+        code: { type: string }

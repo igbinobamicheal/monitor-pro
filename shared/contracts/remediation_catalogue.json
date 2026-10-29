@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Hardened Remediation Action Catalogue",
+  "version": "2.0.0",
+  "actions": [
+    {
+      "id": "collect_deep_diagnostics",
+      "title": "Trigger Deep Hardware & Event Log Diagnostics",
+      "risk_level": "read_only",
+      "requires_approval": false,
+      "timeout_seconds": 60,
+      "parameter_schema": {
+        "type": "object",
+        "properties": {
+          "log_window_minutes": { "type": "integer", "default": 60, "maximum": 1440 }
+        }
+      }
+    },
+    {
+      "id": "restart_windows_service",
+      "title": "Restart Named Windows Service",
+      "risk_level": "low_risk",
+      "requires_approval": true,
+      "timeout_seconds": 30,
+      "parameter_schema": {
+        "type": "object",
+        "required": ["service_name"],
+        "properties": {
+          "service_name": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "description": "Exact service identifier (e.g. Spooler, W32Time)"
+          }
+        }
+      }
+    },
+    {
+      "id": "clean_temp_files",
+      "title": "Clean System Temp Files",
+      "risk_level": "low_risk",
+      "requires_approval": true,
+      "timeout_seconds": 120,
+      "parameter_schema": {
+        "type": "object",
+        "properties": {
+          "older_than_days": { "type": "integer", "default": 7, "minimum": 1 }
+        }
+      }
+    },
+    {
+      "id": "flush_dns_cache",
+      "title": "Flush DNS Resolver Cache",
+      "risk_level": "read_only",
+      "requires_approval": false,
+      "timeout_seconds": 15,
+      "parameter_schema": { "type": "object" }
+    },
+    {
+      "id": "restart_machine",
+      "title": "Graceful System Reboot",
+      "risk_level": "destructive",
+      "requires_approval": true,
+      "timeout_seconds": 60,
+      "parameter_schema": {
+        "type": "object",
+        "required": ["grace_period_seconds", "user_notification_message"],
+        "properties": {
+          "grace_period_seconds": { "type": "integer", "default": 60, "minimum": 10, "maximum": 600 },
+          "user_notification_message": { "type": "string", "maxLength": 200 }
+        }
+      }
+    }
+  ]
+}

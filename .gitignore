@@ -1,39 +1,41 @@
-# Build directories
-build/
+# Build outputs
+target/
 bin/
 obj/
-out/
-backend/build/
-agent/build/
+*.exe
+*.dll
+*.pdb
+*.so
+*.dylib
 
-# IDE files
-.vs/
-.vscode/
-*.user
-*.suo
-*.db
-*.opendb
-
-
-
-# Vercel
-.vercel/
+# Dependencies
 node_modules/
+.pnp
+.pnp.js
 
-# Logs & temp files
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Environments & Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production
+.env.production.local
+.env*.local
+*.pem
+*.key
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
 *.log
-*.tmp
 
-# vcpkg manifest installation folders
-vcpkg_installed/
-vcpkg-installed/
-
-# Secret configuration files (contain credentials, JWT secrets, etc.)
-backend/config/config.json
-agent/config/config.json
-
-# Local configurations & installers
-/config.json
-/installer/windows/
-
-installer/
+# Docker data volumes
+deploy/data/
